@@ -2,44 +2,32 @@ ARG UBUNTU_VERSION=22.04
 # This needs to generally match the container host's environment.
 ARG ROCM_VERSION=5.7.1
 # Target the ROCM build image
-ARG BASE_ROCM_DEV_CONTAINER=rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}-complete
+ARG BASE_ROCM_DEV_CONTAINER=debian:bookworm
 # Target the ROCM runtime image
 ARG BASE_ROCM_RUN_CONTAINER=rocm/dev-ubuntu-${UBUNTU_VERSION}:${ROCM_VERSION}
 
 FROM ${BASE_ROCM_DEV_CONTAINER} AS build
 
-# Rust toolchain version
-ARG RUST_TOOLCHAIN=stable
+ARG RELEASE_TAG=nightly
+ARG DEVICE_TYPE=rocm57
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
-    pkg-config \
-    libssl-dev \
-    protobuf-compiler \
-    git \
-    cmake \
+    ca-certificates \
     && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
-# setup rust.
-RUN curl https://sh.rustup.rs -sSf | bash -s -- --default-toolchain ${RUST_TOOLCHAIN} -y
-ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /root/workspace
 
 RUN mkdir -p /opt/tabby/bin
 RUN mkdir -p /opt/tabby/lib
-RUN mkdir -p target
 
-COPY . .
+RUN curl -L https://github.com/TabbyML/tabby/releases/download/${RELEASE_TAG}/tabby_x86_64-manylinux2014-${DEVICE_TYPE} -o /opt/tabby/bin/tabby
+RUN chmod +x /opt/tabby/bin/tabby
 
-RUN --mount=type=cache,target=/usr/local/cargo/registry \
-    --mount=type=cache,target=/root/workspace/target \
-    cargo build --features rocm,prod-db --release --package tabby && \
-    cp target/release/tabby /opt/tabby/bin/
 
 FROM ${BASE_ROCM_RUN_CONTAINER} AS runtime
 
@@ -68,4 +56,6 @@ COPY --from=build /opt/tabby /opt/tabby
 ENV PATH="$PATH:/opt/tabby/bin"
 ENV TABBY_ROOT=/data
 
+VOLUME [ "/data" ]
+EXPOSE 8080/tcp
 ENTRYPOINT ["/opt/tabby/bin/tabby"]

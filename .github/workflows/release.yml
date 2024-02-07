@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - 'v*'
-      - 'nightly'
-      - '!*-dev'
+      - "v*"
+      - "nightly"
+      - "!*-dev"
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
     paths:
-      - '.github/workflows/release.yml'
+      - ".github/workflows/release.yml"
 
 concurrency:
-  group: ${{ github.workflow_ref }}-${{ github.head_ref || github.ref_name }} 
-  
+  group: ${{ github.workflow_ref }}-${{ github.head_ref || github.ref_name }}
+
   # If this is enabled it will cancel current running and start latest
   cancel-in-progress: true
 
@@ -27,7 +27,17 @@ jobs:
     container: ${{ matrix.container }}
     strategy:
       matrix:
-        binary: [aarch64-apple-darwin, x86_64-manylinux2014, x86_64-windows-msvc, x86_64-manylinux2014-cuda117, x86_64-manylinux2014-cuda122, x86_64-windows-msvc-cuda117, x86_64-windows-msvc-cuda122, x86_64-manylinux2014-rocm57]
+        binary:
+          [
+            aarch64-apple-darwin,
+            x86_64-manylinux2014,
+            x86_64-windows-msvc,
+            x86_64-manylinux2014-cuda117,
+            x86_64-manylinux2014-cuda122,
+            x86_64-windows-msvc-cuda117,
+            x86_64-windows-msvc-cuda122,
+            x86_64-manylinux2014-rocm57,
+          ]
         include:
           - os: macos-latest
             target: aarch64-apple-darwin
@@ -56,13 +66,13 @@ jobs:
             binary: x86_64-windows-msvc-cuda117
             ext: .exe
             build_args: --features cuda,prod-db
-            windows_cuda: '11.7.1'
+            windows_cuda: "11.7.1"
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary: x86_64-windows-msvc-cuda122
             ext: .exe
             build_args: --features cuda,prod-db
-            windows_cuda: '12.2.0'
+            windows_cuda: "12.2.0"
           - os: dimerun-k3-ubuntu2204
             target: x86_64-unknown-linux-gnu
             binary: x86_64-manylinux2014-rocm57
@@ -118,7 +128,7 @@ jobs:
         uses: Jimver/cuda-toolkit@v0.2.11
         with:
           cuda: ${{ matrix.windows_cuda }}
-          method: 'network'
+          method: "network"
           sub-packages: '["nvcc", "cudart", "cublas", "cublas_dev", "thrust", "visual_studio_integration"]'
         if: runner.os == 'Windows' && matrix.windows_cuda != ''
 
@@ -147,8 +157,13 @@ jobs:
 
       - uses: ncipollo/release-action@v1
         with:
-          allowUpdates: true          
+          allowUpdates: true
           prerelease: true
           artifacts: "tabby_*/tabby_*"
           tag: ${{ github.ref_name }}
           removeArtifacts: true
+
+      - name: Trigger docker image build
+        uses: ./.github/workflows/docker.yml
+        with:
+          release-tag: ${{ github.ref_name }}
